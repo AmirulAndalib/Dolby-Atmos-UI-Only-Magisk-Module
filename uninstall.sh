@@ -18,7 +18,7 @@ for PKG in $PKGS; do
   rm -rf /data/user*/"$UID"/$PKG
 done
 remove_sepolicy_rule
-rm -rf /data/vendor/dolby/dax_sqlite3.db
+rm -rf /data/vendor/dolby/*.db
 
 
 

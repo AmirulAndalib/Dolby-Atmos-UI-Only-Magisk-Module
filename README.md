@@ -13,7 +13,7 @@
 ## Requirements
 - Android 9 and up
 - Supported ROM in-built Dolby Audio Processing sound effect with dms-hal-2-0 or dms-hal-1-0 service
-- Magisk or KernelSU installed
+- Magisk or Kitsune Mask or KernelSU or Apatch installed
 
 ## Installation Guide & Download Link
 - Install this module https://www.pling.com/p/1742547/ via Magisk app or KernelSU app only

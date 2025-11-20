@@ -71,14 +71,22 @@ else
 fi
 
 # detect
-UUID=9d4921da-8225-4f29-aefa-39537a04bcaa
+NAME='UUID: 9d4921da-8225-4f29-aefa-39537a04bcaa'
 if [ "$BOOTMODE" == true ]; then
-  if ! dumpsys media.audio_flinger | grep -q $UUID; then
-    ui_print "! $UUID UUID not found."
+  if lshal debug android.hardware.audio.effect@7.0::IEffectsFactory/default | grep -q "$NAME"\
+  || lshal debug android.hardware.audio.effect@6.0::IEffectsFactory/default | grep -q "$NAME"\
+  || lshal debug android.hardware.audio.effect@5.0::IEffectsFactory/default | grep -q "$NAME"\
+  || lshal debug android.hardware.audio.effect@4.0::IEffectsFactory/default | grep -q "$NAME"\
+  || lshal debug android.hardware.audio.effect@2.0::IEffectsFactory/default | grep -q "$NAME"\
+  || dumpsys media.audio_flinger | grep -q "$NAME"; then
+    ui_print "- $NAME is detected."
+  else
+    ui_print "! $NAME not found."
     ui_print "  This ROM doesn't have Dolby Audio Processing soundfx."
     abort
   fi
 fi
+ui_print " "
 
 # recovery
 mount_partitions_in_recovery
@@ -131,7 +139,7 @@ if [ "$BOOTMODE" == true ]; then
     fi
   done
 fi
-rm -f /data/vendor/dolby/dax_sqlite3.db
+rm -f /data/vendor/dolby/*.db
 rm -rf $MODPATH/unused
 remove_sepolicy_rule
 ui_print " "
@@ -215,20 +223,17 @@ sed -i 's|#2||g' $MODPATH/post-fs-data.sh
 }
 permissive() {
 FILE=/sys/fs/selinux/enforce
-SELINUX=`cat $FILE`
-if [ "$SELINUX" == 1 ]; then
-  if ! setenforce 0; then
-    echo 0 > $FILE
-  fi
-  SELINUX=`cat $FILE`
-  if [ "$SELINUX" == 1 ]; then
+FILE2=/sys/fs/selinux/policy
+if [ "`toybox cat $FILE`" = 1 ]; then
+  chmod 640 $FILE
+  chmod 440 $FILE2
+  echo 0 > $FILE
+  if [ "`toybox cat $FILE`" = 1 ]; then
     ui_print "  Your device can't be turned to Permissive state."
     ui_print "  Using Magisk Permissive mode instead."
     permissive_2
   else
-    if ! setenforce 1; then
-      echo 1 > $FILE
-    fi
+    echo 1 > $FILE
     sed -i 's|#1||g' $MODPATH/post-fs-data.sh
   fi
 else
@@ -343,8 +348,75 @@ if [ "$BOOTMODE" == true ] && [ ! "$FILE" ]; then
   fi
   ui_print " "
 fi
-rm -rf $MODPATH/system_2.0
-rm -rf $MODPATH/system_1.0
+rm -rf $MODPATH/system_*.0
+
+# settings
+cp -raf $VENDOR/etc/dolby $MODPATH/system/vendor/etc
+FILE=$MODPATH/system/vendor/etc/dolby/*default.xml
+PROP=`grep_prop dolby.bass $OPTIONALS`
+if [ "$PROP" == true ]; then
+  ui_print "- Changing all bass-enhancer-enable value to true"
+  sed -i 's|bass-enhancer-enable value="false"|bass-enhancer-enable value="true"|g' $FILE
+elif [ "$PROP" == false ]; then
+  ui_print "- Changing all bass-enhancer-enable value to false"
+  sed -i 's|bass-enhancer-enable value="true"|bass-enhancer-enable value="false"|g' $FILE
+elif [ "$PROP" ] && [ "$PROP" != def ] && [ "$PROP" -gt 0 ]; then
+  ui_print "- Changing all bass-enhancer-enable value to true"
+  sed -i 's|bass-enhancer-enable value="false"|bass-enhancer-enable value="true"|g' $FILE
+  ROWS=`grep bass-enhancer-boost $FILE | sed -e 's|<bass-enhancer-boost value="||g' -e 's|"/>||g' -e 's|" />||g'`
+  if [ "$ROWS" ]; then
+    ui_print "- Default bass-enhancer-boost value:"
+    ui_print "$ROWS"
+    ui_print "- Changing all bass-enhancer-boost value to $PROP"
+    for ROW in $ROWS; do
+      sed -i "s|bass-enhancer-boost value=\"$ROW\"|bass-enhancer-boost value=\"$PROP\"|g" $FILE
+    done
+  else
+    ui_print "- This version does not support bass-enhancer-boost"
+  fi
+fi
+if [ "`grep_prop dolby.virtualizer $OPTIONALS`" == 1 ]; then
+  ui_print "- Changing all virtualizer-enable value to true"
+  sed -i 's|virtualizer-enable value="false"|virtualizer-enable value="true"|g' $FILE
+  sed -i 's|virtualizer_enable value="false"|virtualizer_enable value="true"|g' $FILE
+elif [ "`grep_prop dolby.virtualizer $OPTIONALS`" == 0 ]; then
+  ui_print "- Changing all virtualizer-enable value to false"
+  sed -i 's|virtualizer-enable value="true"|virtualizer-enable value="false"|g' $FILE
+  sed -i 's|virtualizer_enable value="true"|virtualizer_enable value="false"|g' $FILE
+fi
+if [ "`grep_prop dolby.volumeleveler $OPTIONALS`" == def ]; then
+  ui_print "- Using default settings of volume-leveler"
+elif [ "`grep_prop dolby.volumeleveler $OPTIONALS`" == 1 ]; then
+  ui_print "- Changing all volume-leveler-enable value to true"
+  sed -i 's|volume-leveler-enable value="false"|volume-leveler-enable value="true"|g' $FILE
+else
+  ui_print "- Changing all volume-leveler-enable value to false"
+  sed -i 's|volume-leveler-enable value="true"|volume-leveler-enable value="false"|g' $FILE
+fi
+if [ "`grep_prop dolby.deepbass $OPTIONALS`" == 1 ]; then
+  ui_print "- Using deeper bass GEQ frequency"
+  sed -i 's|frequency="47"|frequency="0"|g' $FILE
+  sed -i 's|frequency="141"|frequency="47"|g' $FILE
+  sed -i 's|frequency="234"|frequency="141"|g' $FILE
+  sed -i 's|frequency="328"|frequency="234"|g' $FILE
+  sed -i 's|frequency="469"|frequency="328"|g' $FILE
+  sed -i 's|frequency="656"|frequency="469"|g' $FILE
+  sed -i 's|frequency="844"|frequency="656"|g' $FILE
+  sed -i 's|frequency="1031"|frequency="844"|g' $FILE
+  sed -i 's|frequency="1313"|frequency="1031"|g' $FILE
+  sed -i 's|frequency="1688"|frequency="1313"|g' $FILE
+  sed -i 's|frequency="2250"|frequency="1688"|g' $FILE
+  sed -i 's|frequency="3000"|frequency="2250"|g' $FILE
+  sed -i 's|frequency="3750"|frequency="3000"|g' $FILE
+  sed -i 's|frequency="4688"|frequency="3750"|g' $FILE
+  sed -i 's|frequency="5813"|frequency="4688"|g' $FILE
+  sed -i 's|frequency="7125"|frequency="5813"|g' $FILE
+  sed -i 's|frequency="9000"|frequency="7125"|g' $FILE
+  sed -i 's|frequency="11250"|frequency="9000"|g' $FILE
+  sed -i 's|frequency="13875"|frequency="11250"|g' $FILE
+  sed -i 's|frequency="19688"|frequency="13875"|g' $FILE
+fi
+ui_print " "
 
 # audio rotation
 FILE=$MODPATH/service.sh

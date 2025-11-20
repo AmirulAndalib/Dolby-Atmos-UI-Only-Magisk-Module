@@ -9,6 +9,7 @@ set -x
 API=`getprop ro.build.version.sdk`
 
 # property
+resetprop -n ro.audio.ignore_effects false
 resetprop -n vendor.audio.dolby.ds2.enabled false
 resetprop -n vendor.audio.dolby.ds2.hardbypass false
 #resetprop -n vendor.audio.gef.debug.flags false
@@ -25,13 +26,18 @@ else
   SERVER=mediaserver
 fi
 killall $SERVER\
- android.hardware.audio@4.0-service-mediatek
+ android.hardware.audio@4.0-service-mediatek\
+ android.hardware.audio.service
 
-# start
+# restart
 NAMES="dms-hal-2-0 dms-hal-1-0"
 for NAME in $NAMES; do
   if [ "`getprop init.svc.$NAME`" == stopped ]; then
     start $NAME
+  elif [ "`getprop init.svc.$NAME`" == running ]\
+  || [ "`getprop init.svc.$NAME`" == restarting ]; then
+    killall vendor.dolby.hardware.dms@2.0-service\
+     vendor.dolby.hardware.dms@1.0-service
   fi
 done
 
@@ -58,24 +64,28 @@ fi
 
 # allow
 PKG=com.dolby.daxappui
-if [ "$API" -ge 30 ]; then
-  appops set $PKG AUTO_REVOKE_PERMISSIONS_IF_UNUSED ignore
-fi
-PKGOPS=`appops get $PKG`
-UID=`dumpsys package $PKG 2>/dev/null | grep -m 1 Id= | sed -e 's|    userId=||g' -e 's|    appId=||g'`
-if [ "$UID" ] && [ "$UID" -gt 9999 ]; then
-  UIDOPS=`appops get --uid "$UID"`
+if appops get $PKG > /dev/null 2>&1; then
+  if [ "$API" -ge 30 ]; then
+    appops set $PKG AUTO_REVOKE_PERMISSIONS_IF_UNUSED ignore
+  fi
+  PKGOPS=`appops get $PKG`
+  UID=`dumpsys package $PKG 2>/dev/null | grep -m 1 Id= | sed -e 's|    userId=||g' -e 's|    appId=||g'`
+  if [ "$UID" ] && [ "$UID" -gt 9999 ]; then
+    UIDOPS=`appops get --uid "$UID"`
+  fi
 fi
 
 # allow
 PKG=com.dolby.daxservice
-if [ "$API" -ge 30 ]; then
-  appops set $PKG AUTO_REVOKE_PERMISSIONS_IF_UNUSED ignore
-fi
-PKGOPS=`appops get $PKG`
-UID=`dumpsys package $PKG 2>/dev/null | grep -m 1 Id= | sed -e 's|    userId=||g' -e 's|    appId=||g'`
-if [ "$UID" ] && [ "$UID" -gt 9999 ]; then
-  UIDOPS=`appops get --uid "$UID"`
+if appops get $PKG > /dev/null 2>&1; then
+  if [ "$API" -ge 30 ]; then
+    appops set $PKG AUTO_REVOKE_PERMISSIONS_IF_UNUSED ignore
+  fi
+  PKGOPS=`appops get $PKG`
+  UID=`dumpsys package $PKG 2>/dev/null | grep -m 1 Id= | sed -e 's|    userId=||g' -e 's|    appId=||g'`
+  if [ "$UID" ] && [ "$UID" -gt 9999 ]; then
+    UIDOPS=`appops get --uid "$UID"`
+  fi
 fi
 
 # function
